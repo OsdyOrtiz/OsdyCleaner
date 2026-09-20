@@ -1,0 +1,26 @@
+Schema: 1
+Rule set: rules-v1
+Outcome: cancelled (complete: false)
+INCOMPLETE: available facts may not cover every root.
+Policy: no_symlink_following=true same_device_only=true max_entries_per_root=10 max_path_bytes_per_root=100
+Estimate: logical=12 basis=regular_file_stat_size completeness=incomplete; allocated=0 basis=stat_blocks_512 completeness=incomplete; deduplication_complete=false
+Roots:
+- npm-cache | npm cache | ~/.npm | status=cancelled reason=cancelled_during_scan findings=1 warnings=[apfs_estimate_uncertain]
+  estimate: logical=12 basis=regular_file_stat_size completeness=incomplete; allocated=0 basis=stat_blocks_512 completeness=unknown; deduplication_complete=false
+- homebrew-cache | Homebrew cache | ~/Library/Caches/Homebrew | status=scanned reason=completed findings=1 warnings=[apfs_estimate_uncertain]
+  estimate: logical=12 basis=regular_file_stat_size completeness=incomplete; allocated=0 basis=stat_blocks_512 completeness=unknown; deduplication_complete=false
+- gradle-caches | Gradle caches | ~/.gradle/caches | status=scanned reason=completed findings=1 warnings=[apfs_estimate_uncertain]
+  estimate: logical=12 basis=regular_file_stat_size completeness=incomplete; allocated=0 basis=stat_blocks_512 completeness=unknown; deduplication_complete=false
+- xcode-derived-data | Xcode DerivedData | ~/Library/Developer/Xcode/DerivedData | status=scanned reason=completed findings=1 warnings=[apfs_estimate_uncertain]
+  estimate: logical=12 basis=regular_file_stat_size completeness=incomplete; allocated=0 basis=stat_blocks_512 completeness=unknown; deduplication_complete=false
+- core-simulator | CoreSimulator | ~/Library/Developer/CoreSimulator | status=scanned reason=completed findings=1 warnings=[apfs_estimate_uncertain]
+  estimate: logical=12 basis=regular_file_stat_size completeness=incomplete; allocated=0 basis=stat_blocks_512 completeness=unknown; deduplication_complete=false
+Findings:
+- npm-cache | ~/.npm/cache | reason=built_in_npm_cache_entry risk=manual_review warnings=[apfs_estimate_uncertain] accounting=1/1/0/0/0
+  estimate: logical=12 basis=regular_file_stat_size completeness=incomplete; allocated=0 basis=stat_blocks_512 completeness=unknown; deduplication_complete=false
+Warnings:
+- npm-cache | ~/.npm/cache | code=apfs_estimate_uncertain related_path=none | APFS allocation is an estimate and not guaranteed reclaimable space.
+Caveats:
+- Manual review required. Estimate—not guaranteed reclaimable space.
+- Logical and allocated sizes are estimates; APFS clones, snapshots, compression, and hard links can make reclaimed space lower or different.
+- CoreSimulator data requires product-aware manual review; no device lifecycle or cleanup semantics are inferred.
