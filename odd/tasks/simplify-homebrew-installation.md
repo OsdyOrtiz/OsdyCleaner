@@ -1,0 +1,30 @@
+# Simplify Homebrew installation
+
+## Goal
+
+Publish the next OsdyCleaner release with `osdy-cleaner` as the only executable name and provide a one-command Homebrew tap installation.
+
+## Decisions
+
+- Primary installation: `brew install OsdyOrtiz/tap/osdy-cleaner`.
+- Executable and Cobra command: `osdy-cleaner`.
+- Compatibility: immediate rename; do not ship an `osdy` alias.
+- Existing v0.1.0 release and tag remain immutable.
+- Version: v0.2.0, because changing the command name is a breaking pre-1.0 change.
+- Phase 1 remains strictly read-only.
+
+## Tasks
+
+- [ ] ODD-H1 — Rename the Go entry point and CLI identity to `osdy-cleaner` with strict RED/GREEN evidence and no `osdy` compatibility alias.
+- [ ] ODD-H2 — Update CI, release packaging, architecture, and user documentation for `osdy-cleaner` and Homebrew-first installation.
+- [ ] ODD-H3 — Verify, review, deliver, tag, and publish immutable v0.2.0 macOS arm64/amd64 assets and checksums.
+- [ ] ODD-H4 — Create the public `OsdyOrtiz/homebrew-tap` repository, publish a checksummed `osdy-cleaner` formula for v0.2.0, and verify install plus execution through Homebrew.
+
+## Evidence
+
+| Task | Status | Commit / evidence |
+| --- | --- | --- |
+| ODD-H1 | pending | — |
+| ODD-H2 | pending | — |
+| ODD-H3 | pending | — |
+| ODD-H4 | pending | — |
