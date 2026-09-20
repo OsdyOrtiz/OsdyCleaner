@@ -1,0 +1,10 @@
+# Swift Package Manager
+.build/
+
+# Local Pi runtime state
+.atl/
+.codegraph/
+.pi/gentle-ai/sdd-preflight.json
+
+# macOS Finder metadata
+.DS_Store
