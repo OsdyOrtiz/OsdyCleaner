@@ -116,29 +116,31 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          dist="$RUNNER_TEMP/osdy-release-$VERSION"
+          dist="$RUNNER_TEMP/osdy-cleaner-release-$VERSION"
           mkdir -p "$dist"
 
           for arch in arm64 amd64; do
             stage="$dist/stage-$arch"
             mkdir -p "$stage"
             CGO_ENABLED=0 GOOS=darwin GOARCH="$arch" go build -trimpath \
-              -o "$stage/osdy" ./cmd/osdy
-            chmod 755 "$stage/osdy"
+              -o "$stage/osdy-cleaner" ./cmd/osdy-cleaner
+            chmod 755 "$stage/osdy-cleaner"
             cp README.md LICENSE "$stage/"
-            tar -C "$stage" -czf "$dist/osdy_${VERSION}_darwin_${arch}.tar.gz" \
-              osdy README.md LICENSE
+            archive="osdy-cleaner_${VERSION}_darwin_${arch}.tar.gz"
+            tar -C "$stage" -czf "$dist/$archive" osdy-cleaner README.md LICENSE
           done
 
           (
             cd "$dist"
-            shasum -a 256 osdy_"$VERSION"_darwin_*.tar.gz > checksums.txt
+            archives=(osdy-cleaner_"$VERSION"_darwin_*.tar.gz)
+            shasum -a 256 "${archives[@]}" > checksums.txt
           )
           cat > "$dist/release-notes.md" <<'EOF'
           ## macOS-only Phase 1
 
-          Osdy is a macOS-only, Phase 1 read-only scanner. It reports developer
-          cache areas that may be reclaimable and does not delete files.
+          OsdyCleaner is a macOS-only, Phase 1 read-only scanner.
+          It reports developer cache areas that may be reclaimable and does not
+          delete files.
 
           ## Signing and notarization
 
@@ -157,8 +159,8 @@ jobs:
           DIST: ${{ steps.package.outputs.dist }}
         run: |
           set -euo pipefail
-          gh release create "$TAG" --verify-tag --title "Osdy $VERSION" \
+          gh release create "$TAG" --verify-tag --title "OsdyCleaner $VERSION" \
             --notes-file "$DIST/release-notes.md" \
-            "$DIST/osdy_${VERSION}_darwin_arm64.tar.gz" \
-            "$DIST/osdy_${VERSION}_darwin_amd64.tar.gz" \
+            "$DIST/osdy-cleaner_${VERSION}_darwin_arm64.tar.gz" \
+            "$DIST/osdy-cleaner_${VERSION}_darwin_amd64.tar.gz" \
             "$DIST/checksums.txt"
