@@ -2,6 +2,12 @@
 name: Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing annotated stable-semver tag to publish
+        required: true
+        type: string
   push:
     tags:
       - "v*"
@@ -20,6 +26,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
@@ -29,23 +36,36 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          tag="$GITHUB_REF_NAME"
+          tag="$RELEASE_TAG"
           semver='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
           if [[ ! "$tag" =~ $semver ]]; then
             printf 'Tag must be stable semver (vMAJOR.MINOR.PATCH): %s\n' \
               "$tag" >&2
             exit 1
           fi
-          if [[ "$(git cat-file -t "$tag")" != tag ]]; then
+
+          ref_endpoint="repos/$GITHUB_REPOSITORY/git/ref/tags/$tag"
+          ref_type="$(gh api "$ref_endpoint" --jq .object.type)"
+          tag_object_sha="$(gh api "$ref_endpoint" --jq .object.sha)"
+          if [[ "$ref_type" != tag ]]; then
             printf 'Release tag must be annotated: %s\n' "$tag" >&2
             exit 1
           fi
+          tag_endpoint="repos/$GITHUB_REPOSITORY/git/tags/$tag_object_sha"
+          tag_commit_sha="$(gh api "$tag_endpoint" --jq .object.sha)"
           main_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
-          if [[ "$GITHUB_SHA" != "$main_sha" ]]; then
+          checkout_sha="$(git rev-parse 'HEAD^{commit}')"
+          if [[ "$tag_commit_sha" != "$main_sha" ]]; then
             printf 'Release tag must target current main: tag=%s main=%s\n' \
-              "$GITHUB_SHA" "$main_sha" >&2
+              "$tag_commit_sha" "$main_sha" >&2
+            exit 1
+          fi
+          if [[ "$checkout_sha" != "$tag_commit_sha" ]]; then
+            printf 'Checkout does not match release tag: checkout=%s tag=%s\n' \
+              "$checkout_sha" "$tag_commit_sha" >&2
             exit 1
           fi
           printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
