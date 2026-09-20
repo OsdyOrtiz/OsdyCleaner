@@ -24,7 +24,7 @@ Publish the next OsdyCleaner release with `osdy-cleaner` as the only executable 
 
 | Task | Status | Commit / evidence |
 | --- | --- | --- |
-| ODD-H1 | complete | RED: `go test ./internal/cli -run 'TestCommandIdentityAndHelp\|TestCommandFailureDiagnostics' -count=1` failed with `Use="osdy"` and `osdy:` diagnostics. GREEN/triangulation: focused CLI and entry-point tests passed; `go test ./...`, `go test -race ./...`, and `go vet ./...` passed. Source commit `85d324860c4336337eaa7931e370383bf91e23c3`. |
+| ODD-H1 | complete | Corrected RED reproduction: in a detached disposable worktree at exact base `2d5f63d`, applying only the `command_test.go` delta and running `go test ./internal/cli -run 'TestCommandIdentityAndHelp|TestCommandFailureDiagnostics' -count=1` failed with `Use="osdy"` and `osdy:` diagnostics (exit 1). GREEN/triangulation: the same selector plus `TestCommandExitClasses` passed on the candidate; `go test ./...`, `go test -race ./...`, and `go vet ./...` passed. Source commit `85d324860c4336337eaa7931e370383bf91e23c3`. |
 | ODD-H2 | pending | — |
 | ODD-H3 | pending | — |
 | ODD-H4 | pending | — |
