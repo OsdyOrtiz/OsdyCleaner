@@ -1,0 +1,29 @@
+# Prepare v0.1.0 release
+
+## Goal
+
+Publish a documented, continuously verified OsdyCleaner v0.1.0 with unsigned macOS arm64 and amd64 binaries.
+
+## Constraints
+
+- Phase 1 remains strictly read-only.
+- License: MIT.
+- Release assets: macOS arm64 and amd64 archives plus SHA-256 checksums.
+- Binaries are not signed or notarized; documentation and release notes must say so.
+- Keep each work unit reviewable and commit it with its verification evidence.
+
+## Tasks
+
+- [ ] ODD-R1 — Add MIT license and a concise README covering installation, actual CLI usage, safety boundary, formats, exit codes, and unsigned-binary expectations.
+- [ ] ODD-R2 — Add macOS CI and tag-driven GitHub Release automation for tested arm64/amd64 archives and checksums.
+- [ ] ODD-R3 — Create evidence-backed follow-up issues for non-blocking native-review advisories, after duplicate and privacy checks.
+- [ ] ODD-R4 — Verify the complete release candidate, obtain native review, merge the release PR, create annotated tag v0.1.0 from fetched origin/main, publish the GitHub Release, and verify assets.
+
+## Evidence
+
+| Task | Status | Commit / evidence |
+| --- | --- | --- |
+| ODD-R1 | pending | — |
+| ODD-R2 | pending | — |
+| ODD-R3 | pending | — |
+| ODD-R4 | pending | — |
