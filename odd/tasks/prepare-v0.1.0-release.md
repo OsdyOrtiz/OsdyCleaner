@@ -20,6 +20,8 @@ Publish a documented, continuously verified OsdyCleaner v0.1.0 with unsigned mac
 - [ ] ODD-R4 — Verify the complete release candidate, obtain native review, merge the release PR, create annotated tag v0.1.0 from fetched origin/main, publish the GitHub Release, and verify assets.
   - [x] Merge verified release candidate PR #13 and push annotated tag `v0.1.0` at `bc0b30bafc234ee1a469d3a83ff428d7ae643a84`.
   - [ ] Recover failed release run #35512079963 by validating the annotated tag through the GitHub API and dispatching the trusted workflow from `main`.
+    - PR #14 replaced unreliable local tag-object inspection with GitHub API validation.
+    - Recovery must accept the immutable release tag as an ancestor of current `main`, because the workflow repair advanced `main` after the tag was created; push-triggered releases still require an exact current-main target.
   - [ ] Verify release assets and close issue #12.
 
 ## Evidence
@@ -29,4 +31,4 @@ Publish a documented, continuously verified OsdyCleaner v0.1.0 with unsigned mac
 | ODD-R1 | complete | `e393d872ef052dddf9d81bc59b0b6c6282005e06`; Markdown readback and `git diff --check` passed. |
 | ODD-R2 | complete | `f93ee0a34e089558434a7ec99ca7db15e8db21d9`; YAML/LSP validation, full Go checks, and local dual-architecture package rehearsal passed. |
 | ODD-R3 | complete | Issues `#8`, `#9`, `#10`, and `#11`; duplicate searches, exact-body privacy scan, and target readback passed. |
-| ODD-R4 | in progress | PR `#13` merged; tag `v0.1.0` pushed; run `#35512079963` failed because checkout exposed the peeled commit rather than a local annotated-tag object. |
+| ODD-R4 | in progress | PR `#13` merged; tag `v0.1.0` pushed; run `#35512079963` failed on local tag-object inspection; PR `#14` added API validation, and recovery ancestry handling remains. |
