@@ -1,0 +1,28 @@
+# OpenSpec project context for SDD initialization.
+project:
+  name: OsdyCleaner
+  slug: osdycleaner
+  summary: Personal macOS terminal cleaner with a read-only discovery-first first phase.
+  language: English
+  stack:
+    language: Go
+    version: "1.24+"
+    module: one Go module
+    libraries: [Bubble Tea v2, Bubbles v2, Lip Gloss v2, Cobra, encoding/json]
+
+sdd:
+  current_phase: 1
+  strict_tdd: true
+  phase_rules:
+    - Phase 1 is read-only scanning and reporting.
+    - Do not add cleanup, deletion, Trash, root, shell, telemetry, or external-volume behavior.
+    - Keep snapshots and reports deterministic and explicitly schema-versioned.
+    - Preserve identity, boundary, and cancellation safety constraints for future phases.
+
+verification:
+  test_runner: go test ./...
+  formatter: gofmt
+  static_check: go vet ./...
+  module_status: pending go.mod bootstrap
+
+artifact_language: English
