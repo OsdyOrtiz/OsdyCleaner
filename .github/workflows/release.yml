@@ -58,9 +58,31 @@ jobs:
           tag_commit_sha="$(gh api "$tag_endpoint" --jq .object.sha)"
           main_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
           checkout_sha="$(git rev-parse 'HEAD^{commit}')"
-          if [[ "$tag_commit_sha" != "$main_sha" ]]; then
-            printf 'Release tag must target current main: tag=%s main=%s\n' \
-              "$tag_commit_sha" "$main_sha" >&2
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            if [[ "$tag_commit_sha" != "$main_sha" ]]; then
+              printf 'Release tag must target current main: tag=%s main=%s\n' \
+                "$tag_commit_sha" "$main_sha" >&2
+              exit 1
+            fi
+          elif [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+              printf 'Release recovery must be dispatched from main: %s\n' \
+                "$GITHUB_REF" >&2
+              exit 1
+            fi
+            compare_endpoint="repos/$GITHUB_REPOSITORY/compare/"
+            compare_endpoint+="$tag_commit_sha...$main_sha"
+            compare_status="$(gh api "$compare_endpoint" --jq .status)"
+            case "$compare_status" in
+              identical | ahead) ;;
+              *)
+                printf 'Release tag is not on current main: status=%s\n' \
+                  "$compare_status" >&2
+                exit 1
+                ;;
+            esac
+          else
+            printf 'Unsupported release event: %s\n' "$GITHUB_EVENT_NAME" >&2
             exit 1
           fi
           if [[ "$checkout_sha" != "$tag_commit_sha" ]]; then
