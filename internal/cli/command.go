@@ -35,7 +35,7 @@ type Dependencies struct {
 func NewCommand(ctx context.Context, dependencies Dependencies) *cobra.Command {
 	var format string
 	command := &cobra.Command{
-		Use:           "osdy",
+		Use:           "osdy-cleaner",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -59,7 +59,7 @@ func Execute(ctx context.Context, dependencies Dependencies, args []string) int 
 	if err := command.ExecuteContext(ctx); err != nil {
 		code := exitCode(err)
 		if dependencies.Error != nil && code != ExitPartial && code != ExitCancelled {
-			fmt.Fprintf(dependencies.Error, "osdy: %v\n", err)
+			fmt.Fprintf(dependencies.Error, "osdy-cleaner: %v\n", err)
 		}
 		return code
 	}

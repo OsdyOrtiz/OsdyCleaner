@@ -46,9 +46,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          build_dir="$RUNNER_TEMP/osdy-cross-build"
+          build_dir="$RUNNER_TEMP/osdy-cleaner-cross-build"
           mkdir -p "$build_dir"
           CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build \
-            -o "$build_dir/osdy_darwin_arm64" ./cmd/osdy
+            -o "$build_dir/osdy-cleaner_darwin_arm64" ./cmd/osdy-cleaner
           CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
-            -o "$build_dir/osdy_darwin_amd64" ./cmd/osdy
+            -o "$build_dir/osdy-cleaner_darwin_amd64" ./cmd/osdy-cleaner

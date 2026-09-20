@@ -23,6 +23,23 @@ func (f *fakeScan) run(context.Context) (core.Snapshot, error) { f.calls++; retu
 
 type terminalBuffer struct{ bytes.Buffer }
 
+func TestCommandIdentityAndHelp(t *testing.T) {
+	command := NewCommand(context.Background(), Dependencies{})
+	if command.Use != "osdy-cleaner" {
+		t.Fatalf("Use=%q", command.Use)
+	}
+
+	var help bytes.Buffer
+	command.SetOut(&help)
+	command.SetArgs([]string{"--help"})
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(help.String(), "osdy-cleaner") || strings.Contains(help.String(), "osdy [command]") {
+		t.Fatalf("help=%q", help.String())
+	}
+}
+
 func TestCommandDefaults(t *testing.T) {
 	for _, tt := range []struct {
 		name string
@@ -75,7 +92,7 @@ func TestCommandExitClasses(t *testing.T) {
 		err     error
 		want    int
 		wantErr string
-	}{{"complete", completeSnapshot(t), nil, ExitComplete, ""}, {"partial", partialSnapshot(t), nil, ExitPartial, ""}, {"cancelled", cancelledSnapshot(t), nil, ExitCancelled, ""}, {"unsupported", core.Snapshot{}, scan.ErrUnsupported, ExitUnsupported, "osdy: scan platform is unsupported\n"}, {"runtime", core.Snapshot{}, errors.New("broken"), ExitFailure, "osdy: broken\n"}} {
+	}{{"complete", completeSnapshot(t), nil, ExitComplete, ""}, {"partial", partialSnapshot(t), nil, ExitPartial, ""}, {"cancelled", cancelledSnapshot(t), nil, ExitCancelled, ""}, {"unsupported", core.Snapshot{}, scan.ErrUnsupported, ExitUnsupported, "osdy-cleaner: scan platform is unsupported\n"}, {"runtime", core.Snapshot{}, errors.New("broken"), ExitFailure, "osdy-cleaner: broken\n"}} {
 		t.Run(tt.name, func(t *testing.T) {
 			f, out, errOut, _, code := execute(t, tt.snap, []string{"scan", "--format", "text"}, false, tt.err)
 			if code != tt.want || f.calls != 1 || errOut.String() != tt.wantErr || (tt.err == nil && out.String() != "text\n") {
@@ -111,7 +128,7 @@ func TestCommandFailures(t *testing.T) {
 
 func TestCommandViewerFailure(t *testing.T) {
 	f, out, errOut, formats, code := executeCustom(t, completeSnapshot(t), []string{"scan", "--format", "tui"}, true, nil, nil, nil, errors.New("viewer"), nil)
-	if code != ExitFailure || f.calls != 1 || out.Len() != 0 || errOut.String() != "osdy: viewer\n" || strings.Join(formats, ",") != "tui" {
+	if code != ExitFailure || f.calls != 1 || out.Len() != 0 || errOut.String() != "osdy-cleaner: viewer\n" || strings.Join(formats, ",") != "tui" {
 		t.Fatalf("code=%d calls=%d stdout=%q stderr=%q formats=%v", code, f.calls, out.String(), errOut.String(), formats)
 	}
 }
@@ -158,13 +175,13 @@ func TestCommandFailureDiagnostics(t *testing.T) {
 		wantOut, wantErr                   string
 		wantCalls                          int
 	}{
-		{"scan", []string{"scan", "--format", "text"}, false, errors.New("scan"), nil, nil, nil, nil, ExitFailure, "", "osdy: scan\n", 1},
-		{"text render", []string{"scan", "--format", "text"}, false, nil, errors.New("render"), nil, nil, nil, ExitFailure, "", "osdy: render\n", 1},
-		{"JSON render", []string{"scan", "--format", "json"}, false, nil, nil, errors.New("render"), nil, nil, ExitFailure, "", "osdy: render\n", 1},
-		{"viewer", []string{"scan", "--format", "tui"}, true, nil, nil, nil, errors.New("viewer"), nil, ExitFailure, "", "osdy: viewer\n", 1},
-		{"write partial", []string{"scan", "--format", "text"}, false, nil, nil, nil, nil, &partialWriter{n: 3, err: errors.New("write")}, ExitFailure, "tex", "osdy: write\n", 1},
-		{"invalid input", []string{"scan", "--format", "xml"}, false, nil, nil, nil, nil, nil, ExitInput, "", "osdy: unsupported format \"xml\"\n", 0},
-		{"unsupported", []string{"scan", "--format", "text"}, false, scan.ErrUnsupported, nil, nil, nil, nil, ExitUnsupported, "", "osdy: scan platform is unsupported\n", 1},
+		{"scan", []string{"scan", "--format", "text"}, false, errors.New("scan"), nil, nil, nil, nil, ExitFailure, "", "osdy-cleaner: scan\n", 1},
+		{"text render", []string{"scan", "--format", "text"}, false, nil, errors.New("render"), nil, nil, nil, ExitFailure, "", "osdy-cleaner: render\n", 1},
+		{"JSON render", []string{"scan", "--format", "json"}, false, nil, nil, errors.New("render"), nil, nil, ExitFailure, "", "osdy-cleaner: render\n", 1},
+		{"viewer", []string{"scan", "--format", "tui"}, true, nil, nil, nil, errors.New("viewer"), nil, ExitFailure, "", "osdy-cleaner: viewer\n", 1},
+		{"write partial", []string{"scan", "--format", "text"}, false, nil, nil, nil, nil, &partialWriter{n: 3, err: errors.New("write")}, ExitFailure, "tex", "osdy-cleaner: write\n", 1},
+		{"invalid input", []string{"scan", "--format", "xml"}, false, nil, nil, nil, nil, nil, ExitInput, "", "osdy-cleaner: unsupported format \"xml\"\n", 0},
+		{"unsupported", []string{"scan", "--format", "text"}, false, scan.ErrUnsupported, nil, nil, nil, nil, ExitUnsupported, "", "osdy-cleaner: scan platform is unsupported\n", 1},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			f, out, errOut, _, code := executeCustom(t, completeSnapshot(t), tt.args, tt.tty, tt.scanErr, tt.textErr, tt.jsonErr, tt.viewErr, tt.writer)

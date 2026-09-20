@@ -1,11 +1,11 @@
-# Osdy
+# OsdyCleaner
 
-Osdy is a macOS-only, Phase 1 read-only scanner for developer cache areas. It shows what may be reclaimable; it never deletes anything.
+OsdyCleaner is a macOS-only, Phase 1 read-only scanner for developer cache areas. It shows what may be reclaimable; it never deletes anything.
 
 ## Scan
 
 ```sh
-osdy scan [--format text|json|tui]
+osdy-cleaner scan [--format text|json|tui]
 ```
 
 When both stdin and stdout are terminals, the default format is `tui`. Otherwise, the default is `text`.
@@ -13,12 +13,12 @@ When both stdin and stdout are terminals, the default format is `tui`. Otherwise
 Examples:
 
 ```sh
-osdy scan
-osdy scan --format text
-osdy scan --format json
+osdy-cleaner scan
+osdy-cleaner scan --format text
+osdy-cleaner scan --format json
 ```
 
-Osdy scans only these fixed locations in the current user's home directory:
+OsdyCleaner scans only these fixed locations in the current user's home directory:
 
 - `~/.npm` — npm cache
 - `~/Library/Caches/Homebrew` — Homebrew cache
@@ -26,33 +26,40 @@ Osdy scans only these fixed locations in the current user's home directory:
 - `~/Library/Developer/Xcode/DerivedData` — Xcode DerivedData
 - `~/Library/Developer/CoreSimulator` — CoreSimulator
 
-There are no arbitrary path arguments. Osdy is read-only: it does not mutate or delete files, invoke `sudo` or a shell, send telemetry, access external volumes, or use the network.
+There are no arbitrary path arguments. OsdyCleaner is read-only: it does not mutate or delete files, invoke `sudo` or a shell, send telemetry, access external volumes, or use the network.
 
-## Install v0.1.0
+## Install v0.2.0
 
-Download the archive for your Mac from the v0.1.0 release:
+Install with Homebrew:
+
+```sh
+brew install OsdyOrtiz/tap/osdy-cleaner
+```
+
+### Manual archive fallback
+
+If you cannot use Homebrew, download the v0.2.0 archive for your Mac and verify it against `checksums.txt` from the same release:
 
 | Mac | Archive |
 | --- | --- |
-| Apple silicon | `osdy_0.1.0_darwin_arm64.tar.gz` |
-| Intel | `osdy_0.1.0_darwin_amd64.tar.gz` |
-
-Verify the downloaded archive against the release checksum, then install the extracted `osdy` binary somewhere on your `PATH` (for example, `~/.local/bin`):
+| Apple silicon | `osdy-cleaner_0.2.0_darwin_arm64.tar.gz` |
+| Intel | `osdy-cleaner_0.2.0_darwin_amd64.tar.gz` |
 
 ```sh
-shasum -a 256 osdy_0.1.0_darwin_arm64.tar.gz
-tar -xzf osdy_0.1.0_darwin_arm64.tar.gz
+grep '  osdy-cleaner_0.2.0_darwin_arm64.tar.gz$' checksums.txt \
+  | shasum -a 256 -c -
+tar -xzf osdy-cleaner_0.2.0_darwin_arm64.tar.gz
 mkdir -p ~/.local/bin
-mv osdy ~/.local/bin/osdy
-chmod 755 ~/.local/bin/osdy
-~/.local/bin/osdy scan --format text
+mv osdy-cleaner ~/.local/bin/osdy-cleaner
+chmod 755 ~/.local/bin/osdy-cleaner
+~/.local/bin/osdy-cleaner scan --format text
 ```
 
-Replace `arm64` with `amd64` on an Intel Mac. Ensure `~/.local/bin` is on your `PATH` before using `osdy` by name.
+Replace `arm64` with `amd64` on an Intel Mac. Ensure `~/.local/bin` is on your `PATH` before using `osdy-cleaner` by name.
 
 ### Gatekeeper
 
-v0.1.0 is unsigned and not notarized. After verifying its release provenance and checksum, use macOS's per-app review flow: try opening the binary, then choose **Open Anyway** in **System Settings → Privacy & Security** if you trust it. Do not disable Gatekeeper globally or use broad quarantine-removal commands.
+v0.2.0 binaries are unsigned and not notarized. After verifying the release provenance and checksum, use macOS's per-app review flow: try opening the binary, then choose **Open Anyway** in **System Settings → Privacy & Security** if you trust it. Do not disable Gatekeeper globally or use broad quarantine-removal commands.
 
 ## Build from source
 
@@ -61,8 +68,8 @@ Go 1.24.2 or newer is required.
 ```sh
 git clone https://github.com/osdy/OsdyCleaner.git
 cd OsdyCleaner
-go build -o osdy ./cmd/osdy
-./osdy scan --format text
+go build -o osdy-cleaner ./cmd/osdy-cleaner
+./osdy-cleaner scan --format text
 ```
 
 ## Automation and output
@@ -70,7 +77,7 @@ go build -o osdy ./cmd/osdy
 `--format json` emits deterministic schema-v1 JSON. It includes the scan outcome, policy, estimates, roots, findings, warnings, and caveats; it is intended for scripts and CI.
 
 ```sh
-osdy scan --format json > osdy-report.json
+osdy-cleaner scan --format json > osdy-cleaner-report.json
 ```
 
 Reported logical and allocated sizes are estimates, not promises of reclaimable disk space. APFS clones, snapshots, compression, and hard links can make actual recovery lower or different. CoreSimulator data also requires product-aware manual review.
@@ -91,12 +98,12 @@ Reported logical and allocated sizes are estimates, not promises of reclaimable 
 After installation or a source build:
 
 ```sh
-osdy scan --format text
-osdy scan --format json
-osdy scan --format tui
+osdy-cleaner scan --format text
+osdy-cleaner scan --format json
+osdy-cleaner scan --format tui
 ```
 
-The TUI command requires terminal input and output. For machine-readable verification, inspect `schema_version` in the JSON output; v0.1.0 emits `1`.
+The TUI command requires terminal input and output. For machine-readable verification, inspect `schema_version` in the JSON output; v0.2.0 emits `1`.
 
 ## License
 

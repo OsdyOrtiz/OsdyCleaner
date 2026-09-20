@@ -4,7 +4,7 @@
 
 ## Quick path
 
-1. Run `osdy scan --category developer-cache` to create a read-only, versioned snapshot.
+1. Run `osdy-cleaner scan --category developer-cache` to create a read-only, versioned snapshot.
 2. Review candidates and risks in the Bubble Tea TUI or JSON output.
 3. Create a plan from that snapshot and, in Phase 2, execute it in Trash mode after confirmation.
 4. Treat reported savings as an **estimate** until Trash is emptied.
@@ -45,7 +45,7 @@ Use one Go module and a deliberately small dependency set:
 
 ```text
 osdycleaner/                         # one Go module
-├── cmd/osdy/                         # main package
+├── cmd/osdy-cleaner/                 # main package
 ├── internal/core/                    # domain, guards, audit, invariants
 ├── internal/rules/                   # built-in versioned rule data
 ├── internal/scan/                    # traversal and candidate collection
@@ -144,14 +144,14 @@ Permanent deletion remains disabled until the Trash flow has test evidence. When
 The TUI maintains category navigation, candidate review, risk/details, selection, and operation status; confirmation is modal. It must show progress, discoveries, warnings, cancellation state, and size estimates. Keys remain `↑/↓` or `j/k`, `Tab`, `Space`, `a`, `/`, `Enter`, `r`, `c`, `Esc`, and `q`, with quit confirmation for an active operation.
 
 ```text
-osdy
-osdy scan [--category ID] [--format text|json] [--output SNAPSHOT]
-osdy rules [--format text|json]
-osdy doctor [--format text|json]
-osdy plan create --snapshot SNAPSHOT --select CANDIDATE_ID...
-osdy plan show --plan PLAN [--format text|json]
-osdy clean --plan PLAN --backend trash
-osdy clean --plan PLAN --backend permanent --confirm-phrase "..."
+osdy-cleaner
+osdy-cleaner scan [--category ID] [--format text|json] [--output SNAPSHOT]
+osdy-cleaner rules [--format text|json]
+osdy-cleaner doctor [--format text|json]
+osdy-cleaner plan create --snapshot SNAPSHOT --select CANDIDATE_ID...
+osdy-cleaner plan show --plan PLAN [--format text|json]
+osdy-cleaner clean --plan PLAN --backend trash
+osdy-cleaner clean --plan PLAN --backend permanent --confirm-phrase "..."
 ```
 
 `scan` is read-only and serializes a schema version. `plan create` accepts IDs from one snapshot, and `clean` accepts a plan—neither accepts paths. JSON is one structured stdout document; progress/diagnostics use stderr. Exit classes: `0` complete, `1` runtime failure, `2` invalid input/confirmation, `3` partial operation, `4` unsupported environment, `130` cancelled.
@@ -183,7 +183,7 @@ Test permanent deletion only in disposable fixtures and after equivalent Trash c
 
 Phase 1 is accepted when:
 
-- [ ] `osdy scan` mutates nothing and requires no privilege, network, or shell.
+- [ ] `osdy-cleaner scan` mutates nothing and requires no privilege, network, or shell.
 - [ ] Built-in rules expose ID, version, category, roots, risk, support notes, and estimate basis.
 - [ ] Text and JSON output are immutable-by-convention, explicitly schema-versioned snapshots.
 - [ ] Candidates show display path, reason, risk, estimates, and warnings.
