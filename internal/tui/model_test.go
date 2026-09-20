@@ -91,6 +91,33 @@ func TestModelDetails(t *testing.T) {
 	}
 }
 
+func TestModelDetailsFitTerminalHeight(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		status   core.RootStatus
+		reason   core.RootReasonCode
+		warnings bool
+	}{
+		{name: "complete details", status: core.RootScanned, reason: core.ReasonCompleted},
+		{name: "incomplete details", status: core.RootPartial, reason: core.ReasonEntryVisibilityGap},
+		{name: "incomplete warnings", status: core.RootPartial, reason: core.ReasonEntryVisibilityGap, warnings: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m := NewModel(snapshot(t, tt.status, tt.reason))
+			m.width, m.height = 500, 22
+			m.setViewportContent()
+			m = update(m, "tab")
+			if tt.warnings {
+				m = update(m, "tab")
+			}
+
+			if got := len(strings.Split(m.View().Content, "\n")); got > m.height {
+				t.Fatalf("details view uses %d rows at terminal height %d: %q", got, m.height, m.View().Content)
+			}
+		})
+	}
+}
+
 func TestModelDetailContextReset(t *testing.T) {
 	m := NewModel(snapshot(t, core.RootScanned, core.ReasonCompleted))
 	m.height = 1
@@ -202,7 +229,7 @@ func TestModelCategoryFacts(t *testing.T) {
 
 func TestModelFindingFacts(t *testing.T) {
 	m := NewModel(snapshot(t, core.RootScanned, core.ReasonCompleted))
-	m.width, m.height = 500, 15
+	m.width, m.height = 500, 30
 	m.setViewportContent()
 	m = update(m, "tab")
 	view := m.View().Content
@@ -217,7 +244,7 @@ func TestModelWarningFacts(t *testing.T) {
 	m := NewModel(snapshot(t, core.RootScanned, core.ReasonCompleted))
 	m = update(m, "l")
 	m = update(m, "l")
-	m.width, m.height = 500, 15
+	m.width, m.height = 500, 30
 	m.setViewportContent()
 	m = update(m, "tab")
 	m = update(m, "tab")

@@ -110,17 +110,30 @@ func (m Model) selectedArea() core.AreaID {
 	}
 	return roots[m.selected].AreaID()
 }
+
+// fixedRows is the number of View rows outside category and viewport content.
+func (m Model) fixedRows() int {
+	rows := 15 // Header, selected category context, and navigation footer.
+	if !m.snapshot.Complete() {
+		rows++
+	}
+	if m.details {
+		rows += 2 // Blank line and details or warnings heading.
+	}
+	return rows
+}
+
 func (m Model) pageSize() int {
-	if m.height <= 2 {
+	if m.details || m.height <= m.fixedRows() {
 		return 1
 	}
-	return m.height - 2
+	return m.height - m.fixedRows()
 }
 func (m Model) detailPageSize() int {
-	if m.height <= 6 {
+	if m.height <= m.fixedRows()+m.pageSize() {
 		return 1
 	}
-	return m.height - 6
+	return m.height - m.fixedRows() - m.pageSize()
 }
 func (m Model) maxDetailOffset() int { return max(0, len(m.detailLines())-m.detailPageSize()) }
 func (m Model) detailLines() []string {
