@@ -1,0 +1,122 @@
+---
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Validate stable version tag
+        id: version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          semver='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          if [[ ! "$tag" =~ $semver ]]; then
+            printf 'Tag must be stable semver (vMAJOR.MINOR.PATCH): %s\n' \
+              "$tag" >&2
+            exit 1
+          fi
+          if [[ "$(git cat-file -t "$tag")" != tag ]]; then
+            printf 'Release tag must be annotated: %s\n' "$tag" >&2
+            exit 1
+          fi
+          main_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          if [[ "$GITHUB_SHA" != "$main_sha" ]]; then
+            printf 'Release tag must target current main: tag=%s main=%s\n' \
+              "$GITHUB_SHA" "$main_sha" >&2
+            exit 1
+          fi
+          printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+          printf 'version=%s\n' "${tag#v}" >> "$GITHUB_OUTPUT"
+      - name: Check formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          unformatted="$(gofmt -l cmd internal)"
+          if [[ -n "$unformatted" ]]; then
+            printf 'Files not formatted by gofmt:\n%s\n' "$unformatted" >&2
+            exit 1
+          fi
+      - name: Check module tidy state
+        run: go mod tidy -diff
+      - name: Test
+        run: go test ./...
+      - name: Test with race detector
+        run: go test -race ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Package macOS archives
+        id: package
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          dist="$RUNNER_TEMP/osdy-release-$VERSION"
+          mkdir -p "$dist"
+
+          for arch in arm64 amd64; do
+            stage="$dist/stage-$arch"
+            mkdir -p "$stage"
+            CGO_ENABLED=0 GOOS=darwin GOARCH="$arch" go build -trimpath \
+              -o "$stage/osdy" ./cmd/osdy
+            chmod 755 "$stage/osdy"
+            cp README.md LICENSE "$stage/"
+            tar -C "$stage" -czf "$dist/osdy_${VERSION}_darwin_${arch}.tar.gz" \
+              osdy README.md LICENSE
+          done
+
+          (
+            cd "$dist"
+            shasum -a 256 osdy_"$VERSION"_darwin_*.tar.gz > checksums.txt
+          )
+          cat > "$dist/release-notes.md" <<'EOF'
+          ## macOS-only Phase 1
+
+          Osdy is a macOS-only, Phase 1 read-only scanner. It reports developer
+          cache areas that may be reclaimable and does not delete files.
+
+          ## Signing and notarization
+
+          These binaries are unsigned and not notarized. Verify the archive
+          checksum and release provenance before using them. Follow macOS's
+          per-app review flow if Gatekeeper prompts; do not disable Gatekeeper
+          globally.
+          EOF
+          printf 'dist=%s\n' "$dist" >> "$GITHUB_OUTPUT"
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          DIST: ${{ steps.package.outputs.dist }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" --verify-tag --title "Osdy $VERSION" \
+            --notes-file "$DIST/release-notes.md" \
+            "$DIST/osdy_${VERSION}_darwin_arm64.tar.gz" \
+            "$DIST/osdy_${VERSION}_darwin_amd64.tar.gz" \
+            "$DIST/checksums.txt"

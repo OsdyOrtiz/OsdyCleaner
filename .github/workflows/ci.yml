@@ -1,0 +1,54 @@
+---
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          unformatted="$(gofmt -l cmd internal)"
+          if [[ -n "$unformatted" ]]; then
+            printf 'Files not formatted by gofmt:\n%s\n' "$unformatted" >&2
+            exit 1
+          fi
+      - name: Check module tidy state
+        run: go mod tidy -diff
+      - name: Test
+        run: go test ./...
+      - name: Test with race detector
+        run: go test -race ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Cross-build macOS binaries without CGO
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_dir="$RUNNER_TEMP/osdy-cross-build"
+          mkdir -p "$build_dir"
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build \
+            -o "$build_dir/osdy_darwin_arm64" ./cmd/osdy
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
+            -o "$build_dir/osdy_darwin_amd64" ./cmd/osdy
