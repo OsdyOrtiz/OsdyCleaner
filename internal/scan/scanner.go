@@ -29,16 +29,21 @@ type FilePipeline struct {
 	closed                               bool
 	submitCtx, stopCtx                   context.Context
 	cancelSubmit, cancelStop             context.CancelFunc
+	stopOnContextCancel                  bool
 	stopOnce                             sync.Once
 }
 
 func NewFilePipeline(port FilePort, workers, jobCapacity, resultCapacity int) (*FilePipeline, error) {
+	return newFilePipeline(port, workers, jobCapacity, resultCapacity, false)
+}
+
+func newFilePipeline(port FilePort, workers, jobCapacity, resultCapacity int, stopOnContextCancel bool) (*FilePipeline, error) {
 	if port == nil || workers < 1 || jobCapacity < 1 || resultCapacity < 1 {
 		return nil, ErrInvalidPipeline
 	}
 	submitCtx, cancelSubmit := context.WithCancel(context.Background())
 	stopCtx, cancelStop := context.WithCancel(context.Background())
-	p := &FilePipeline{port: port, workers: workers, jobCapacity: jobCapacity, resultCapacity: resultCapacity, jobs: make(chan fileEnvelope, jobCapacity), results: make(chan FileResult, resultCapacity), submitCtx: submitCtx, cancelSubmit: cancelSubmit, stopCtx: stopCtx, cancelStop: cancelStop}
+	p := &FilePipeline{port: port, workers: workers, jobCapacity: jobCapacity, resultCapacity: resultCapacity, jobs: make(chan fileEnvelope, jobCapacity), results: make(chan FileResult, resultCapacity), submitCtx: submitCtx, cancelSubmit: cancelSubmit, stopCtx: stopCtx, cancelStop: cancelStop, stopOnContextCancel: stopOnContextCancel}
 	p.workersWG.Add(workers)
 	for range workers {
 		go func() {
@@ -57,7 +62,7 @@ func NewFilePipeline(port FilePort, workers, jobCapacity, resultCapacity int) (*
 					}
 					result := p.port.Inspect(envelope.ctx, envelope.job)
 					p.results <- result
-					if envelope.ctx.Err() != nil {
+					if p.stopCtx.Err() != nil || p.stopOnContextCancel && envelope.ctx.Err() != nil {
 						return
 					}
 				}
@@ -356,12 +361,21 @@ func (s Scanner) consumeDirectories(ctx context.Context, definition BuiltinDefin
 	ancestors := make(map[string]Identity)
 	var pipeline *FilePipeline
 	var drained <-chan []FileResult
+	var pipelineDone chan struct{}
 	if hasFilePort {
 		workers := s.fileWorkers
 		if workers < 1 {
 			workers = 1
 		}
-		pipeline, _ = NewFilePipeline(port, workers, s.limits.JobCapacity, s.limits.ResultCapacity)
+		pipeline, _ = newFilePipeline(port, workers, s.limits.JobCapacity, s.limits.ResultCapacity, true)
+		pipelineDone = make(chan struct{})
+		go func() {
+			select {
+			case <-ctx.Done():
+				pipeline.Stop()
+			case <-pipelineDone:
+			}
+		}()
 		results := make(chan []FileResult, 1)
 		go func() { results <- pipeline.drain() }()
 		drained = results
@@ -463,6 +477,7 @@ func (s Scanner) consumeDirectories(ctx context.Context, definition BuiltinDefin
 		// Draining completes before this method returns, so Scan closes the root
 		// only after active work joins and every accepted result is consumed.
 		results := <-drained
+		close(pipelineDone)
 		consumeFileResults(definition, results, s.results, add, &partial, &boundary)
 	}
 	if walkErr != nil {

@@ -598,8 +598,17 @@ func (w trustedRootWalker) facts(ctx context.Context, fd int, path string, check
 }
 func walkerReadDir(fd int) ([]byte, error) {
 	buffer := make([]byte, 8192)
-	count, err := unix.Getdirentries(fd, buffer, nil)
-	return buffer[:count], err
+	var records []byte
+	for {
+		count, err := unix.Getdirentries(fd, buffer, nil)
+		if err != nil {
+			return nil, err
+		}
+		if count == 0 {
+			return records, nil
+		}
+		records = append(records, buffer[:count]...)
+	}
 }
 func walkerOpen(parent int, name string, flags int, mode uint32) (int, error) {
 	if name == "/" {

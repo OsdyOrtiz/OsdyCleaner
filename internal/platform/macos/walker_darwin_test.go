@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -37,6 +38,29 @@ func TestWalkerPreCancelledEnumerationSkipsReadDir(t *testing.T) {
 	facts, err := walker.enumerateDirectory(ctx, 41, testWalkerFacts(t))
 	if facts != nil || !errors.Is(err, scan.ErrInaccessible) || record.readDirs != 0 || record.openCount != 0 {
 		t.Fatalf("facts=%v err=%v reads=%d opens=%d", facts, err, record.readDirs, record.openCount)
+	}
+}
+
+func TestWalkerReadDirReadsAllEntries(t *testing.T) {
+	dir := t.TempDir()
+	const entries = 256
+	for i := range entries {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("entry-%03d-%s", i, strings.Repeat("x", 64))), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fd, err := syscall.Open(dir, walkerFlags, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer syscall.Close(fd)
+	raw, err := walkerReadDir(fd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, err := parseDirectoryRecords(raw)
+	if err != nil || len(records) != entries {
+		t.Fatalf("records=%d err=%v, want %d", len(records), err, entries)
 	}
 }
 

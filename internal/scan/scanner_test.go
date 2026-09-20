@@ -478,6 +478,34 @@ func TestScannerBoundedFileJobs(t *testing.T) {
 	}
 }
 
+func TestFilePipelineContinuesAfterCancelledJob(t *testing.T) {
+	release := make(chan struct{})
+	port := lifecycleFilePort{started: make(chan FileJob, 2), seen: make(chan error, 1), release: release}
+	pipeline, err := NewFilePipeline(port, 1, 2, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := pipeline.Submit(ctx, mustFileJob(t, "cancelled", 1)); err != nil {
+		t.Fatal(err)
+	}
+	receiveFileJob(t, port.started, "cancelled inspect")
+	cancel()
+	if err := receiveError(t, port.seen, "cancelled inspect result"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Inspect context=%v", err)
+	}
+	close(release)
+	if err := pipeline.Submit(context.Background(), mustFileJob(t, "later", 2)); err != nil {
+		t.Fatal(err)
+	}
+	pipeline.CloseJobs()
+	results := pipeline.Drain()
+	if len(results) != 1 || !reflect.DeepEqual(results[0].Components(), []string{"later"}) {
+		t.Fatalf("results=%#v", results)
+	}
+}
+
 func TestScannerFileBackpressure(t *testing.T) {
 	testFilePipelineNilContext(t)
 	port := lifecycleFilePort{started: make(chan FileJob, 1), seen: make(chan error, 1)}
