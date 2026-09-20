@@ -15,7 +15,7 @@ Publish the next OsdyCleaner release with `osdy-cleaner` as the only executable 
 
 ## Tasks
 
-- [ ] ODD-H1 — Rename the Go entry point and CLI identity to `osdy-cleaner` with strict RED/GREEN evidence and no `osdy` compatibility alias.
+- [x] ODD-H1 — Rename the Go entry point and CLI identity to `osdy-cleaner` with strict RED/GREEN evidence and no `osdy` compatibility alias.
 - [ ] ODD-H2 — Update CI, release packaging, architecture, and user documentation for `osdy-cleaner` and Homebrew-first installation.
 - [ ] ODD-H3 — Verify, review, deliver, tag, and publish immutable v0.2.0 macOS arm64/amd64 assets and checksums.
 - [ ] ODD-H4 — Create the public `OsdyOrtiz/homebrew-tap` repository, publish a checksummed `osdy-cleaner` formula for v0.2.0, and verify install plus execution through Homebrew.
@@ -24,7 +24,7 @@ Publish the next OsdyCleaner release with `osdy-cleaner` as the only executable 
 
 | Task | Status | Commit / evidence |
 | --- | --- | --- |
-| ODD-H1 | pending | — |
+| ODD-H1 | complete | RED: `go test ./internal/cli -run 'TestCommandIdentityAndHelp\|TestCommandFailureDiagnostics' -count=1` failed with `Use="osdy"` and `osdy:` diagnostics. GREEN/triangulation: focused CLI and entry-point tests passed; `go test ./...`, `go test -race ./...`, and `go vet ./...` passed. Source commit `85d324860c4336337eaa7931e370383bf91e23c3`. |
 | ODD-H2 | pending | — |
 | ODD-H3 | pending | — |
 | ODD-H4 | pending | — |
