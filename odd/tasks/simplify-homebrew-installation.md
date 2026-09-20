@@ -12,13 +12,14 @@ Publish the next OsdyCleaner release with `osdy-cleaner` as the only executable 
 - Existing v0.1.0 release and tag remain immutable.
 - Version: v0.2.0, because changing the command name is a breaking pre-1.0 change.
 - Phase 1 remains strictly read-only.
+- The source repository is public by explicit user authorization so Homebrew can fetch release assets without GitHub authentication.
 
 ## Tasks
 
 - [x] ODD-H1 — Rename the Go entry point and CLI identity to `osdy-cleaner` with strict RED/GREEN evidence and no `osdy` compatibility alias.
 - [x] ODD-H2 — Update CI, release packaging, architecture, and user documentation for `osdy-cleaner` and Homebrew-first installation.
 - [x] ODD-H3 — Verify, review, deliver, tag, and publish immutable v0.2.0 macOS arm64/amd64 assets and checksums.
-- [ ] ODD-H4 — Create the public `OsdyOrtiz/homebrew-tap` repository, publish a checksummed `osdy-cleaner` formula for v0.2.0, and verify install plus execution through Homebrew.
+- [x] ODD-H4 — Create the public `OsdyOrtiz/homebrew-tap` repository, publish a checksummed `osdy-cleaner` formula for v0.2.0, and verify install plus execution through Homebrew.
 
 ## Evidence
 
@@ -27,4 +28,4 @@ Publish the next OsdyCleaner release with `osdy-cleaner` as the only executable 
 | ODD-H1 | complete | Corrected RED reproduction: in a detached disposable worktree at exact base `2d5f63d`, applying only the `command_test.go` delta and running `go test ./internal/cli -run 'TestCommandIdentityAndHelp|TestCommandFailureDiagnostics' -count=1` failed with `Use="osdy"` and `osdy:` diagnostics (exit 1). GREEN/triangulation: the same selector plus `TestCommandExitClasses` passed on the candidate; `go test ./...`, `go test -race ./...`, and `go vet ./...` passed. Source commit `85d324860c4336337eaa7931e370383bf91e23c3`. |
 | ODD-H2 | complete; source commit `576387ef5209436a18e2ba11a2d2923cdfea6854` | RED: scoped assertions found the old README/workflow/architecture command, assets, and path. GREEN: both workflow YAML files parsed; all 14 embedded shell blocks passed `bash -n`; migration assertions, full tests, race tests, vet, and both cross-builds passed. A disposable release rehearsal produced both v0.2.0 archives, verified checksums, exact `osdy-cleaner`/README/LICENSE contents, arm64 and x86_64 Mach-O identities, and native `--help`; all disposable output was removed. |
 | ODD-H3 | complete | PR `#18` merged as `7da569a8c7b16686af44d4d6e1589fa17bdf688f`; main CI run `#35532636363` passed; annotated tag `v0.2.0` targets that exact commit; release run `#35532686596` passed. Downloaded arm64/amd64 assets passed published checksums, exact-content checks, and Mach-O identity checks. Native review was unavailable with no lineage; independent verification passed. |
-| ODD-H4 | pending | — |
+| ODD-H4 | complete | Public tap root commit `b0a8ef5bc3c1fcee0b90905d0816e6acaa834ca5`; formula audit/style passed; both public release checksums matched; clean `brew install OsdyOrtiz/tap/osdy-cleaner`, `brew test`, help, and schema-v1 read-only JSON scan passed; test install/tap were removed. Independent verifier passed and both repositories were clean/synchronized. |
