@@ -306,6 +306,12 @@ func (s Scanner) FinalizedFileFacts() (FinalizedFileFacts, error) {
 }
 
 func (s Scanner) Scan(ctx context.Context) ([]core.RootObservation, error) {
+	return s.ScanWithProgress(ctx, nil)
+}
+
+// ScanWithProgress scans the canonical roots and synchronously reports category
+// lifecycle events from its root orchestration goroutine. observer is optional.
+func (s Scanner) ScanWithProgress(ctx context.Context, observer ProgressObserver) ([]core.RootObservation, error) {
 	if s.results != nil {
 		s.results.reset()
 	}
@@ -313,39 +319,58 @@ func (s Scanner) Scan(ctx context.Context) ([]core.RootObservation, error) {
 	if err != nil {
 		return nil, err
 	}
+	emit := func(kind ProgressEventKind, definition *BuiltinDefinition, processed int, status core.RootStatus) {
+		if observer != nil {
+			observer(newProgressEvent(kind, definition, processed, len(definitions), status))
+		}
+	}
+	emit(ProgressScanStarted, nil, 0, "")
 	observations := make([]core.RootObservation, 0, len(definitions))
+	processed, cancelled := 0, false
 	for _, definition := range definitions {
 		if ctx.Err() != nil {
+			cancelled = true
 			observations = append(observations, cancelledBefore(definition))
 			continue
 		}
+		emit(ProgressCategoryStarted, &definition, processed, "")
 		root, err := s.walker.AcquireRoot(ctx, home, absoluteUnder(home.String(), definition.RelativePath), s.limits)
 		if err != nil {
+			var observation core.RootObservation
 			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
-				observations = append(observations, cancelledDuring(definition))
-				continue
+				cancelled = true
+				observation = cancelledDuring(definition)
+			} else {
+				observation = acquisitionObservation(definition, err)
 			}
-			observations = append(observations, acquisitionObservation(definition, err))
+			observations = append(observations, observation)
+			processed++
+			emit(ProgressCategoryCompleted, &definition, processed, observation.Status())
 			continue
 		}
 		observation := s.consumeDirectories(ctx, definition, root)
 		closeErr := root.Close()
 		if ctx.Err() != nil {
+			cancelled = true
 			codes := observation.WarningCodes()
 			if closeErr != nil {
 				codes = append(codes, core.WarningRootInaccessible)
 			}
-			observations = append(observations, cancelledDuringWithWarnings(definition, codes))
-			continue
-		}
-		if closeErr != nil {
-			observations = append(observations, inaccessible(definition))
-			continue
+			observation = cancelledDuringWithWarnings(definition, codes)
+		} else if closeErr != nil {
+			observation = inaccessible(definition)
 		}
 		observations = append(observations, observation)
+		processed++
+		emit(ProgressCategoryCompleted, &definition, processed, observation.Status())
 	}
 	if s.results != nil {
 		s.results.setRoots(observations)
+	}
+	if cancelled {
+		emit(ProgressScanCancelled, nil, processed, "")
+	} else {
+		emit(ProgressScanFinished, nil, processed, "")
 	}
 	return observations, nil
 }
