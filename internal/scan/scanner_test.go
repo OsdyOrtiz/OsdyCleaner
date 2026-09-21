@@ -1500,6 +1500,103 @@ func TestScannerPathBudget(t *testing.T) {
 	}
 }
 
+func TestScannerProgressEvents(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		acquire error
+		facts   []DirectoryFact
+		want    []ProgressEventKind
+		status  core.RootStatus
+	}{
+		{"complete", nil, nil, []ProgressEventKind{ProgressScanStarted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressScanFinished}, core.RootScanned},
+		{"missing", ErrMissing, nil, []ProgressEventKind{ProgressScanStarted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressScanFinished}, core.RootMissing},
+		{"inaccessible", ErrInaccessible, nil, []ProgressEventKind{ProgressScanStarted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressScanFinished}, core.RootInaccessible},
+		{"partial", nil, []DirectoryFact{directoryFact(t, []string{"special"}, EntrySpecial, Identity{}, Identity{}, true)}, []ProgressEventKind{ProgressScanStarted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressScanFinished}, core.RootPartial},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			walker := &directoryScriptWalker{scannerWalker: &scannerWalker{results: map[core.AreaID]error{core.AreaNPMCache: tc.acquire}}, scripts: map[core.AreaID][]DirectoryFact{core.AreaNPMCache: tc.facts}}
+			var events []ProgressEvent
+			roots, err := NewScanner(&scannerHome{home: "/fixture/home"}, scannerDefinitions(t, "/fixture/home"), walker, WalkLimits{MaxDepth: 2, MaxDescriptors: 2}).ScanWithProgress(context.Background(), func(event ProgressEvent) { events = append(events, event) })
+			if err != nil || len(events) != len(tc.want) || roots[0].Status() != tc.status {
+				t.Fatalf("roots=%v events=%v err=%v", roots, events, err)
+			}
+			for i, want := range tc.want {
+				got := events[i]
+				if got.Kind() != want || got.Validate() != nil || got.Total() != len(builtinDefinitions) || (want == ProgressCategoryCompleted && got.Status() != roots[got.Processed()-1].Status()) {
+					t.Fatalf("event %d = %#v, want kind=%s", i, got, want)
+				}
+				if want == ProgressCategoryStarted || want == ProgressCategoryCompleted {
+					index := got.Processed()
+					if want == ProgressCategoryCompleted {
+						index--
+					}
+					if got.CategoryID() != builtinDefinitions[index].AreaID || got.CategoryDisplayName() != builtinDefinitions[index].DisplayName {
+						t.Fatalf("event %d category=%s/%q", i, got.CategoryID(), got.CategoryDisplayName())
+					}
+				}
+			}
+			if ProgressEventKind("invalid").Validate() == nil {
+				t.Fatal("invalid progress kind was accepted")
+			}
+		})
+	}
+}
+
+func TestScannerProgressCancellationAndEquivalence(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	root := cancellationRoot(t, make(chan struct{}, 1))
+	scanner := scannerWithRoots(t, map[core.AreaID]*filePortRoot{core.AreaNPMCache: root}, map[core.AreaID][]DirectoryFact{core.AreaNPMCache: {regularFact(t, "active", 10)}})
+	var events []ProgressEvent
+	done := make(chan []core.RootObservation, 1)
+	go func() {
+		roots, _ := scanner.ScanWithProgress(ctx, func(event ProgressEvent) { events = append(events, event) })
+		done <- roots
+	}()
+	<-root.started
+	cancel()
+	roots := <-done
+	if got := []ProgressEventKind{events[0].Kind(), events[1].Kind(), events[2].Kind(), events[3].Kind()}; !reflect.DeepEqual(got, []ProgressEventKind{ProgressScanStarted, ProgressCategoryStarted, ProgressCategoryCompleted, ProgressScanCancelled}) || roots[0].Status() != core.RootCancelled || events[2].Status() != core.RootCancelled || events[3].Processed() != 1 {
+		t.Fatalf("roots=%v events=%v", roots, events)
+	}
+	plain := scannerWithRoots(t, nil, map[core.AreaID][]DirectoryFact{core.AreaNPMCache: {regularFact(t, "same", 11)}})
+	withProgress := scannerWithRoots(t, nil, map[core.AreaID][]DirectoryFact{core.AreaNPMCache: {regularFact(t, "same", 11)}})
+	wantRoots, _ := plain.Scan(context.Background())
+	gotRoots, _ := withProgress.ScanWithProgress(context.Background(), nil)
+	wantFacts, _ := plain.FinalizedFileFacts()
+	gotFacts, _ := withProgress.FinalizedFileFacts()
+	if !reflect.DeepEqual(wantRoots, gotRoots) || !reflect.DeepEqual(wantFacts.facts, gotFacts.facts) {
+		t.Fatalf("progress changed scan result")
+	}
+
+	preCancelled, stop := context.WithCancel(context.Background())
+	stop()
+	var preEvents []ProgressEvent
+	preRoots, err := plain.ScanWithProgress(preCancelled, func(event ProgressEvent) { preEvents = append(preEvents, event) })
+	if err != nil || len(preRoots) != len(builtinDefinitions) || !reflect.DeepEqual([]ProgressEventKind{preEvents[0].Kind(), preEvents[1].Kind()}, []ProgressEventKind{ProgressScanStarted, ProgressScanCancelled}) || preEvents[1].Processed() != 0 {
+		t.Fatalf("pre-cancelled roots=%v events=%v err=%v", preRoots, preEvents, err)
+	}
+
+	concurrent := scannerWithRoots(t, nil, map[core.AreaID][]DirectoryFact{core.AreaNPMCache: {regularFact(t, "a", 12), regularFact(t, "b", 13)}})
+	concurrent.fileWorkers = 2
+	var mu sync.Mutex
+	observing, overlap := false, false
+	_, err = concurrent.ScanWithProgress(context.Background(), func(ProgressEvent) {
+		mu.Lock()
+		if observing {
+			overlap = true
+		}
+		observing = true
+		mu.Unlock()
+		time.Sleep(time.Millisecond)
+		mu.Lock()
+		observing = false
+		mu.Unlock()
+	})
+	if err != nil || overlap {
+		t.Fatalf("observer overlapped with %d workers: err=%v overlap=%t", concurrent.fileWorkers, err, overlap)
+	}
+}
+
 func TestScannerLimitsStopRegularJobs(t *testing.T) {
 	for _, tc := range []struct {
 		name     string

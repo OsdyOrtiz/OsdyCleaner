@@ -109,6 +109,72 @@ func TestCommandTerminalValidation(t *testing.T) {
 	}
 }
 
+func TestCommandTextAndJSONDoNotUseInteractiveScan(t *testing.T) {
+	for _, format := range []string{"text", "json"} {
+		t.Run(format, func(t *testing.T) {
+			scanCalls, interactiveCalls := 0, 0
+			var output bytes.Buffer
+			code := Execute(context.Background(), Dependencies{
+				Scan: func(context.Context) (core.Snapshot, error) {
+					scanCalls++
+					return completeSnapshot(t), nil
+				},
+				InteractiveScan: func(context.Context) (core.Snapshot, error) {
+					interactiveCalls++
+					return core.Snapshot{}, errors.New("interactive scan must not run")
+				},
+				RenderText: func(core.Snapshot) ([]byte, error) { return []byte("text\n"), nil },
+				RenderJSON: func(core.Snapshot) ([]byte, error) { return []byte("{\"scan\":true}\n"), nil },
+				Input:      strings.NewReader(""),
+				Output:     &output,
+				Error:      &bytes.Buffer{},
+				IsTerminal: func(io.Reader, io.Writer) bool { return false },
+			}, []string{"scan", "--format", format})
+			if code != ExitComplete || scanCalls != 1 || interactiveCalls != 0 {
+				t.Fatalf("code=%d scan_calls=%d interactive_calls=%d", code, scanCalls, interactiveCalls)
+			}
+		})
+	}
+}
+
+func TestCommandTUIUsesInteractiveScanOnlyOnce(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		snap core.Snapshot
+		err  error
+		want int
+	}{
+		{"complete", completeSnapshot(t), nil, ExitComplete},
+		{"partial", partialSnapshot(t), nil, ExitPartial},
+		{"cancelled", cancelledSnapshot(t), nil, ExitCancelled},
+		{"viewer failure", core.Snapshot{}, errors.New("viewer"), ExitFailure},
+		{"global failure", core.Snapshot{}, errors.New("global"), ExitFailure},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			scanCalls, interactiveCalls := 0, 0
+			code := Execute(context.Background(), Dependencies{
+				Scan: func(context.Context) (core.Snapshot, error) {
+					scanCalls++
+					return core.Snapshot{}, errors.New("noninteractive scan must not run")
+				},
+				InteractiveScan: func(context.Context) (core.Snapshot, error) {
+					interactiveCalls++
+					return tt.snap, tt.err
+				},
+				RenderText: func(core.Snapshot) ([]byte, error) { return nil, nil },
+				RenderJSON: func(core.Snapshot) ([]byte, error) { return nil, nil },
+				Input:      strings.NewReader(""),
+				Output:     &bytes.Buffer{},
+				Error:      &bytes.Buffer{},
+				IsTerminal: func(io.Reader, io.Writer) bool { return true },
+			}, []string{"scan", "--format", "tui"})
+			if code != tt.want || scanCalls != 0 || interactiveCalls != 1 {
+				t.Fatalf("code=%d scan_calls=%d interactive_calls=%d", code, scanCalls, interactiveCalls)
+			}
+		})
+	}
+}
+
 func TestCommandFailures(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
@@ -128,7 +194,7 @@ func TestCommandFailures(t *testing.T) {
 
 func TestCommandViewerFailure(t *testing.T) {
 	f, out, errOut, formats, code := executeCustom(t, completeSnapshot(t), []string{"scan", "--format", "tui"}, true, nil, nil, nil, errors.New("viewer"), nil)
-	if code != ExitFailure || f.calls != 1 || out.Len() != 0 || errOut.String() != "osdy-cleaner: viewer\n" || strings.Join(formats, ",") != "tui" {
+	if code != ExitFailure || f.calls != 0 || out.Len() != 0 || errOut.String() != "osdy-cleaner: viewer\n" || strings.Join(formats, ",") != "tui" {
 		t.Fatalf("code=%d calls=%d stdout=%q stderr=%q formats=%v", code, f.calls, out.String(), errOut.String(), formats)
 	}
 }
@@ -178,7 +244,7 @@ func TestCommandFailureDiagnostics(t *testing.T) {
 		{"scan", []string{"scan", "--format", "text"}, false, errors.New("scan"), nil, nil, nil, nil, ExitFailure, "", "osdy-cleaner: scan\n", 1},
 		{"text render", []string{"scan", "--format", "text"}, false, nil, errors.New("render"), nil, nil, nil, ExitFailure, "", "osdy-cleaner: render\n", 1},
 		{"JSON render", []string{"scan", "--format", "json"}, false, nil, nil, errors.New("render"), nil, nil, ExitFailure, "", "osdy-cleaner: render\n", 1},
-		{"viewer", []string{"scan", "--format", "tui"}, true, nil, nil, nil, errors.New("viewer"), nil, ExitFailure, "", "osdy-cleaner: viewer\n", 1},
+		{"viewer", []string{"scan", "--format", "tui"}, true, nil, nil, nil, errors.New("viewer"), nil, ExitFailure, "", "osdy-cleaner: viewer\n", 0},
 		{"write partial", []string{"scan", "--format", "text"}, false, nil, nil, nil, nil, &partialWriter{n: 3, err: errors.New("write")}, ExitFailure, "tex", "osdy-cleaner: write\n", 1},
 		{"invalid input", []string{"scan", "--format", "xml"}, false, nil, nil, nil, nil, nil, ExitInput, "", "osdy-cleaner: unsupported format \"xml\"\n", 0},
 		{"unsupported", []string{"scan", "--format", "text"}, false, scan.ErrUnsupported, nil, nil, nil, nil, ExitUnsupported, "", "osdy-cleaner: scan platform is unsupported\n", 1},
@@ -228,7 +294,7 @@ func executeWith(t *testing.T, snapshot core.Snapshot, args []string, tty bool, 
 	if failWrite {
 		writer = failingWriter{}
 	}
-	code := Execute(context.Background(), Dependencies{Scan: f.run, RenderText: renderer("text\n", renderErr, &formats, "text"), RenderJSON: renderer("{\"scan\":true}\n", renderErr, &formats, "json"), View: func(core.Snapshot) error { formats = append(formats, "tui"); return nil }, Input: strings.NewReader(""), Output: writer, Error: errOut, IsTerminal: func(io.Reader, io.Writer) bool { return tty }}, args)
+	code := Execute(context.Background(), Dependencies{Scan: f.run, InteractiveScan: func(ctx context.Context) (core.Snapshot, error) { formats = append(formats, "tui"); return f.run(ctx) }, RenderText: renderer("text\n", renderErr, &formats, "text"), RenderJSON: renderer("{\"scan\":true}\n", renderErr, &formats, "json"), Input: strings.NewReader(""), Output: writer, Error: errOut, IsTerminal: func(io.Reader, io.Writer) bool { return tty }}, args)
 	return f, out, errOut, formats, code
 }
 func renderer(value string, err error, formats *[]string, format string) func(core.Snapshot) ([]byte, error) {
@@ -242,7 +308,10 @@ func executeCustom(t *testing.T, snapshot core.Snapshot, args []string, tty bool
 	if writer == nil {
 		writer = out
 	}
-	code := Execute(context.Background(), Dependencies{Scan: f.run, RenderText: renderer("text\n", textErr, &formats, "text"), RenderJSON: renderer("{\"scan\":true}\n", jsonErr, &formats, "json"), View: func(core.Snapshot) error { formats = append(formats, "tui"); return viewErr }, Input: strings.NewReader(""), Output: writer, Error: errOut, IsTerminal: func(io.Reader, io.Writer) bool { return tty }}, args)
+	code := Execute(context.Background(), Dependencies{Scan: f.run, InteractiveScan: func(context.Context) (core.Snapshot, error) {
+		formats = append(formats, "tui")
+		return snapshot, viewErr
+	}, RenderText: renderer("text\n", textErr, &formats, "text"), RenderJSON: renderer("{\"scan\":true}\n", jsonErr, &formats, "json"), Input: strings.NewReader(""), Output: writer, Error: errOut, IsTerminal: func(io.Reader, io.Writer) bool { return tty }}, args)
 	return f, out, errOut, formats, code
 }
 

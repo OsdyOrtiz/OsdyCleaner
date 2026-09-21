@@ -1,4 +1,4 @@
-// Package tui presents finalized scan snapshots without starting or changing scans.
+// Package tui presents read-only scan progress and finalized snapshots.
 package tui
 
 import (
@@ -11,32 +11,66 @@ import (
 	"github.com/osdy/OsdyCleaner/internal/core"
 )
 
-// Model contains only presentation state over an immutable finalized snapshot.
+// Model contains presentation state over transient scan progress or a finalized snapshot.
 type Model struct {
-	snapshot                       core.Snapshot
-	selected, offset, detailOffset int
-	width, height                  int
-	details, warnings, quitting    bool
-	alternateScreen                bool
-	viewport                       viewport.Model
+	snapshot                              core.Snapshot
+	selected, offset, detailOffset        int
+	width, height                         int
+	details, warnings, quitting           bool
+	alternateScreen                       bool
+	viewport                              viewport.Model
+	session                               *scanSession
+	running, cancelling, finished, failed bool
+	processed, total                      int
+	category                              string
+	err                                   error
 }
 
 // NewModel constructs a viewer for an already finalized snapshot.
 func NewModel(snapshot core.Snapshot) Model {
-	m := Model{snapshot: snapshot, width: 120, height: 8, viewport: viewport.New()}
+	m := Model{snapshot: snapshot, width: 120, height: 8, details: len(snapshot.Roots()) != 0, viewport: viewport.New()}
 	m.setViewportContent()
 	return m
 }
 
-// Init is deliberately pure: a viewer never starts a scan.
-func (Model) Init() tea.Cmd { return nil }
+// Init starts a scan only for a scan-session model; finalized viewers remain pure.
+func (m Model) Init() tea.Cmd {
+	if m.session == nil {
+		return nil
+	}
+	return m.session.start()
+}
 
-// Update changes only viewer state. It never performs scan or filesystem work.
+// Update changes only presentation state. Scanner work runs in session commands.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.quitting {
 		return m, nil
 	}
 	switch msg := msg.(type) {
+	case scanStartedMsg:
+		m.running = true
+		return m, m.session.wait()
+	case scanProgressMsg:
+		m.processed, m.total, m.category = msg.processed, msg.total, msg.category
+		return m, m.session.wait()
+	case scanCancelMsg:
+		// A listener is already outstanding while the scan is running. Starting
+		// another here could consume the result out of order and leak a waiter.
+		return m, nil
+	case scanResultMsg:
+		wasCancelling := m.cancelling
+		m.running, m.cancelling, m.finished = false, false, true
+		m.err, m.failed = msg.err, msg.err != nil
+		if msg.err == nil {
+			m.snapshot = msg.snapshot
+			m.details = len(m.snapshot.Roots()) != 0
+			m.setViewportContent()
+		}
+		if wasCancelling {
+			m.quitting = true
+			return m, tea.Quit
+		}
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.setViewportContent()
@@ -48,6 +82,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch key {
 		case "q", "esc", "ctrl+c":
+			if m.cancelling {
+				return m, nil
+			}
+			if m.running {
+				m.cancelling = true
+				return m, m.session.requestCancel()
+			}
 			m.quitting = true
 			return m, tea.Quit
 		case "h", "left":
@@ -70,13 +111,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pageSelection(-m.pageSize())
 		case "tab":
 			if len(m.snapshot.Roots()) != 0 {
-				if !m.details {
-					m.details = true
-				} else if !m.warnings {
-					m.warnings = true
-				} else {
-					m.details, m.warnings = false, false
-				}
+				// The finalized dashboard always has a visible detail pane.
+				m.details, m.warnings = true, !m.warnings
 				m.resetViewportContent()
 			}
 		}
@@ -144,37 +180,57 @@ func (m Model) detailLines() []string {
 	if area == "" {
 		return nil
 	}
-	lines := []string{fmt.Sprintf("Findings: %s", area)}
+	lines := m.selectedDetailContext(area)
+	lines = append(lines, fmt.Sprintf("Findings: %s", area))
+	found := false
 	for _, finding := range m.snapshot.Findings() {
 		if finding.AreaID() != area {
 			continue
 		}
+		found = true
 		lines = append(lines, "Path: "+finding.DisplayPath(), fmt.Sprintf("Reason: %s Risk: %s", finding.Reason(), finding.Risk()), estimateLine("Estimate", finding.Estimate()))
 		accounting := finding.Accounting()
 		lines = append(lines, fmt.Sprintf("Accounting: measured_objects=%d attributed_objects=%d already_accounted_paths=%d hard_link_observations=%d unknown_identity_objects=%d", accounting.MeasuredObjects(), accounting.AttributedObjects(), accounting.AlreadyAccountedPaths(), accounting.HardLinkObservations(), accounting.UnknownIdentityObjects()), fmt.Sprintf("Warnings: %v", finding.WarningCodes()))
 	}
-	if len(lines) == 1 {
+	if !found {
 		return append(lines, "No findings recorded.")
 	}
 	return lines
 }
+func (m Model) selectedDetailContext(area core.AreaID) []string {
+	for _, root := range m.snapshot.Roots() {
+		if root.AreaID() == area {
+			return []string{
+				"Category: " + root.DisplayName(),
+				"Root: " + root.DisplayPath(),
+				fmt.Sprintf("Status: %s Reason: %s", root.Status(), root.Reason()),
+				dashboardEstimate("Estimate", root.Estimate()),
+			}
+		}
+	}
+	return nil
+}
+
 func (m Model) warningLines() []string {
 	area := m.selectedArea()
 	if area == "" {
 		return nil
 	}
-	lines := []string{fmt.Sprintf("Warnings: %s", area)}
+	lines := m.selectedDetailContext(area)
+	lines = append(lines, fmt.Sprintf("Warnings: %s", area))
+	found := false
 	for _, warning := range m.snapshot.Warnings() {
 		if warning.AreaID() != area {
 			continue
 		}
+		found = true
 		related := "none"
 		if path, ok := warning.RelatedPath(); ok {
 			related = path
 		}
 		lines = append(lines, "Path: "+warning.DisplayPath(), "Code: "+string(warning.Code()), "Message: "+warning.Message(), "Related path: "+related)
 	}
-	if len(lines) == 1 {
+	if !found {
 		return append(lines, "No warnings recorded.")
 	}
 	return lines

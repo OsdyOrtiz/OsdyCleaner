@@ -25,7 +25,7 @@ func failure(err error) error {
 }
 
 func run(ctx context.Context, d Dependencies, format string) error {
-	if d.Scan == nil || d.RenderText == nil || d.RenderJSON == nil || d.View == nil || d.Output == nil {
+	if d.Scan == nil || d.InteractiveScan == nil || d.RenderText == nil || d.RenderJSON == nil || d.Output == nil {
 		return failure(errors.New("read-only scan dependencies are unavailable"))
 	}
 	if format == "" {
@@ -44,8 +44,15 @@ func run(ctx context.Context, d Dependencies, format string) error {
 	default:
 		return inputError("unsupported format %q", format)
 	}
-	var snapshot core.Snapshot
-	snapshot, err := d.Scan(ctx)
+	var (
+		snapshot core.Snapshot
+		err      error
+	)
+	if format == "tui" {
+		snapshot, err = d.InteractiveScan(ctx)
+	} else {
+		snapshot, err = d.Scan(ctx)
+	}
 	if err != nil {
 		if errors.Is(err, scan.ErrUnsupported) {
 			return &exitError{code: ExitUnsupported, err: err}
@@ -53,9 +60,6 @@ func run(ctx context.Context, d Dependencies, format string) error {
 		return failure(err)
 	}
 	if format == "tui" {
-		if err := d.View(snapshot); err != nil {
-			return failure(err)
-		}
 		return outcomeExit(snapshot)
 	}
 	var bytes []byte

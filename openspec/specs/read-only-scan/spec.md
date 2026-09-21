@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the first bounded OsdyCleaner capability: a local, non-privileged, read-only scan of exactly five built-in macOS developer/cache areas, represented by one versioned snapshot and presented consistently as text, JSON, or a minimal read-only terminal viewer.
+Define the first bounded OsdyCleaner capability: a local, non-privileged, read-only scan of exactly five built-in macOS developer/cache areas, represented by one versioned snapshot and presented consistently as text, JSON, or a live read-only terminal dashboard.
 
 ## Requirements
 
@@ -135,12 +135,12 @@ Every successfully finalized scan MUST produce one immutable-by-convention snaps
 
 The top-level outcome MUST be `complete`, `partial`, or `cancelled`. It MUST be `complete` when all roots are `scanned` or `missing`, `partial` when any non-cancellation visibility gap exists, and `cancelled` when cancellation determines the result. Estimates in a partial or cancelled snapshot MUST be labeled incomplete.
 
-Text, JSON, and the terminal viewer MUST consume this same snapshot contract as their sole source of scan facts. They MUST NOT rescan, maintain a presentation-specific result domain, or independently recompute findings, statuses, warnings, or totals. A breaking change to snapshot fields or semantics MUST use a new schema version.
+Text, JSON, and the terminal dashboard MUST consume this same snapshot contract as their sole source of scan facts. They MUST NOT rescan, maintain a presentation-specific result domain, or independently recompute findings, statuses, warnings, or totals. A breaking change to snapshot fields or semantics MUST use a new schema version.
 
 #### Scenario: Render one snapshot in every presentation
 
 - GIVEN one finalized snapshot with a fixed schema version
-- WHEN it is rendered as text, JSON, and in the terminal viewer
+- WHEN it is rendered as text, JSON, and in the terminal dashboard
 - THEN every presentation identifies the same schema version and scan outcome
 - AND corresponding roots, findings, risks, estimates, completeness, and warnings agree
 - AND changing presentation does not trigger another scan
@@ -174,25 +174,52 @@ JSON output MUST preserve typed values and explicit unknown values rather than p
 - THEN both report the same root status, finding facts, estimate basis, manual-review risk, warning, and partial outcome
 - AND only their presentation formatting differs
 
-### Requirement: Minimal Read-Only Terminal Viewer
+### Requirement: Live Read-Only Terminal Dashboard
 
-This slice SHALL include a minimal read-only Bubble Tea viewer under the shared-snapshot contract. The viewer MUST be limited to snapshot summary, the five area categories, warnings/details, navigation, and quit. It MUST display complete, partial, and cancelled snapshots without changing their facts.
+When terminal mode is selected, Bubble Tea MUST open before scan work begins. Scan I/O MUST run only in Bubble Tea commands/effects; `Update` MUST be state-only and `View` MUST be pure. Text and JSON modes MUST remain noninteractive and unchanged.
 
-The viewer MUST use clear phrases equivalent to “Read-only scan,” “Manual review required,” and “Estimate—not guaranteed reclaimable space.” Controls and content MUST NOT use cleanup, selection, action, confirmation, deletion, removal, Trash, or reclaim commands or affordances. Quitting the viewer MUST NOT start, authorize, or imply another operation.
+Live progress MUST be limited to the five canonical categories in their specified serial order and activity for the active category. It MUST NOT fabricate per-file percentages, a pre-scan pass, or other scan facts. On cancellation, the terminal program MUST wait for scanner shutdown before finalizing or restoring the terminal.
 
-#### Scenario: Review a snapshot in read-only language
+The terminal program MUST render one finalized schema-v1 snapshot as the sole authoritative source for outcome, estimates, roots, findings, and warnings. Progress is transient UI state and MUST NOT alter snapshot facts. It MUST display complete, partial, and cancelled snapshots without changing their facts.
 
-- GIVEN a finalized snapshot with findings and warnings
-- WHEN the viewer displays its summary, categories, and details
-- THEN the viewer identifies the scan as read-only
-- AND it labels findings for manual review and estimates as not guaranteed reclaimable space
-- AND the available controls provide only navigation, details, and quit
+The finalized read-only dashboard MUST expose estimates, outcome, findings, warnings, all canonical categories in order, and selected finding or warning detail. Its responsive cyber-neon wide and compact presentations MUST preserve the same textual meaning without color. It MUST use clear phrases equivalent to “Read-only scan,” “Manual review required,” and “Estimate—not guaranteed reclaimable space.” Controls MUST provide `h`/`l` or arrows, `j`/`k` or arrows, `Page Up`/`Page Down`, `Tab`, and `q`. Controls and content MUST NOT use cleanup, selection, action, confirmation, deletion, removal, Trash, or reclaim commands or affordances. Quitting MUST NOT start, authorize, or imply another operation.
+
+#### Scenario: Open terminal mode before scanning
+
+- GIVEN `scan` is invoked with terminal input and output
+- WHEN terminal mode starts
+- THEN Bubble Tea opens before scan I/O begins
+- AND scan I/O is performed by commands/effects rather than `Update` or `View`
+- AND text and JSON mode behavior remains noninteractive and unchanged
+
+#### Scenario: Show honest live progress
+
+- GIVEN terminal mode is scanning the fixed built-in roots
+- WHEN progress is rendered
+- THEN it identifies only completed canonical categories and active-category activity in canonical serial order
+- AND it shows no per-file percentage, pre-scan pass, or fabricated scan fact
+
+#### Scenario: Cancel an active terminal scan
+
+- GIVEN terminal mode has an active scanner
+- WHEN cancellation is requested
+- THEN no new scanner work is begun
+- AND the program waits for scanner shutdown before finalizing or restoring the terminal
+- AND any finalized result remains a cancelled, incomplete snapshot
+
+#### Scenario: Review a finalized dashboard
+
+- GIVEN one finalized schema-v1 snapshot with findings and warnings
+- WHEN the dashboard renders in wide or compact layout
+- THEN both layouts preserve the same textual outcome, estimates, canonical category order, findings, warnings, and selected detail without relying on color
+- AND the dashboard consumes that snapshot as its sole result source
+- AND controls provide category selection, selected-detail scrolling, findings/warnings switching, and quit only
 - AND no selection or action wording or affordance is present
 
 #### Scenario: View a cancelled snapshot
 
 - GIVEN a valid cancelled snapshot with incomplete observations
-- WHEN the viewer opens it
+- WHEN the dashboard opens
 - THEN cancellation and incompleteness are prominent
 - AND available partial facts and warnings match the shared snapshot
 - AND quitting performs no further operation
@@ -238,7 +265,7 @@ Cancellation MUST NOT discard already finalized warnings or findings and MUST NO
 
 For non-interactive text and JSON modes, the finalized snapshot representation MUST be written to stdout. Snapshot warnings MUST remain in that representation; transient progress and diagnostics MUST be written only to stderr. JSON stdout MUST contain exactly one JSON document and no progress, decoration, or diagnostic text.
 
-If a global initialization or finalization failure prevents a trustworthy snapshot, stdout MUST NOT contain a purported snapshot and stderr MUST contain the diagnostic. The terminal viewer MAY render on the attached interactive terminal, but non-render diagnostics MUST remain separate.
+If a global initialization or finalization failure prevents a trustworthy snapshot, stdout MUST NOT contain a purported snapshot and stderr MUST contain the diagnostic. The terminal dashboard MAY render on the attached interactive terminal, but non-render diagnostics MUST remain separate.
 
 The `scan` exit classes SHALL be stable:
 
@@ -272,7 +299,7 @@ A root-scoped warning MUST NOT produce code `1`. Cancellation MUST take preceden
 
 ### Requirement: Disposable and Deterministic Verification
 
-All automated filesystem tests for this capability MUST use controlled fixtures and temporary directories and MUST never inspect or mutate the developer's or test runner's real home directory. Tests MUST cover normal and empty roots, every-root-missing, an inaccessible root and entry, symbolic links, simulated or controlled mount/device boundaries, repeated identities/hard links, cancellation, deterministic text and JSON, shared snapshot equivalence, and read-only viewer language.
+All automated filesystem tests for this capability MUST use controlled fixtures and temporary directories and MUST never inspect or mutate the developer's or test runner's real home directory. Tests MUST cover normal and empty roots, every-root-missing, an inaccessible root and entry, symbolic links, simulated or controlled mount/device boundaries, repeated identities/hard links, cancellation, deterministic text and JSON, shared snapshot equivalence, and read-only dashboard language.
 
 Fixture tests MUST NOT require network access, external developer tools, privilege escalation, real external volumes, or mutation of personal files. Any run metadata used in output verification MUST be fixed.
 

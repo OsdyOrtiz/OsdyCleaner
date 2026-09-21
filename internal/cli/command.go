@@ -21,14 +21,14 @@ const (
 
 // Dependencies are application boundaries; production construction belongs to main.
 type Dependencies struct {
-	Scan       func(context.Context) (core.Snapshot, error)
-	RenderText func(core.Snapshot) ([]byte, error)
-	RenderJSON func(core.Snapshot) ([]byte, error)
-	View       func(core.Snapshot) error
-	Input      io.Reader
-	Output     io.Writer
-	Error      io.Writer
-	IsTerminal func(io.Reader, io.Writer) bool
+	Scan            func(context.Context) (core.Snapshot, error)
+	InteractiveScan func(context.Context) (core.Snapshot, error)
+	RenderText      func(core.Snapshot) ([]byte, error)
+	RenderJSON      func(core.Snapshot) ([]byte, error)
+	Input           io.Reader
+	Output          io.Writer
+	Error           io.Writer
+	IsTerminal      func(io.Reader, io.Writer) bool
 }
 
 // NewCommand constructs the grammar only. Its RunE delegates to the application.

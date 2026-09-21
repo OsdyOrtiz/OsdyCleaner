@@ -139,22 +139,26 @@ The default backend moves selected items to macOS Trash. UI and CLI say **“mov
 
 Permanent deletion remains disabled until the Trash flow has test evidence. When enabled, it requires an exact count/estimate phrase such as `DELETE 3 ITEMS / 2.4 GiB`; rejects generic non-interactive `--yes` for personal/high-risk items; revalidates per item; records actual outcomes rather than claimed reclaimed bytes; and uses the same audit schema for failures and skips.
 
-## TUI and CLI
+## TUI and CLI: read-only scan flow
 
-The TUI maintains category navigation, candidate review, risk/details, selection, and operation status; confirmation is modal. It must show progress, discoveries, warnings, cancellation state, and size estimates. Keys remain `↑/↓` or `j/k`, `Tab`, `Space`, `a`, `/`, `Enter`, `r`, `c`, `Esc`, and `q`, with quit confirmation for an active operation.
+In Phase 1, `osdy-cleaner scan` is the read-only reporting flow. With terminal input and output, Bubble Tea opens before scan work and owns the live experience:
 
 ```text
-osdy-cleaner
-osdy-cleaner scan [--category ID] [--format text|json] [--output SNAPSHOT]
-osdy-cleaner rules [--format text|json]
-osdy-cleaner doctor [--format text|json]
-osdy-cleaner plan create --snapshot SNAPSHOT --select CANDIDATE_ID...
-osdy-cleaner plan show --plan PLAN [--format text|json]
-osdy-cleaner clean --plan PLAN --backend trash
-osdy-cleaner clean --plan PLAN --backend permanent --confirm-phrase "..."
+CLI selects terminal mode
+  → Bubble Tea starts
+  → command/effect scans the five canonical categories serially
+  → transient progress reaches Update (state only)
+  → pure View renders active-category activity and completed-category count
+  → scanner shuts down
+  → one finalized schema-v1 snapshot
+  → read-only dashboard renders that snapshot
 ```
 
-`scan` is read-only and serializes a schema version. `plan create` accepts IDs from one snapshot, and `clean` accepts a plan—neither accepts paths. JSON is one structured stdout document; progress/diagnostics use stderr. Exit classes: `0` complete, `1` runtime failure, `2` invalid input/confirmation, `3` partial operation, `4` unsupported environment, `130` cancelled.
+Progress is deliberately limited to the active category and the five-category serial count: it never implies a per-file percentage or a pre-scan pass. Cancellation waits for scanner shutdown before finalization and terminal restoration. The snapshot is the only authoritative source for final outcome, estimates, findings, root observations, and warnings; live progress is not a result fact.
+
+The responsive cyber-neon dashboard preserves textual meaning in wide and compact layouts without relying on color. It shows outcome, estimate caveats, all five categories in order, findings, warnings, and selected detail. `h`/`l` or Left/Right choose a category, `j`/`k` or Up/Down scroll its detail, `Page Up`/`Page Down` jump through categories, `Tab` switches findings and warnings, and `q` quits. All findings require manual review; estimates do not promise reclaimable space.
+
+`--format text` and `--format json` stay noninteractive and stable. JSON remains one schema-v1 document on stdout; transient diagnostics belong on stderr. Exit classes are `0` complete, `1` runtime failure, `2` invalid input or format, `3` partial snapshot, `4` unsupported environment, and `130` cancelled.
 
 ## Performance and testing
 

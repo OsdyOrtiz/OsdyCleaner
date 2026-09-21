@@ -8,15 +8,27 @@ OsdyCleaner is a macOS-only, Phase 1 read-only scanner for developer cache areas
 osdy-cleaner scan [--format text|json|tui]
 ```
 
-When both stdin and stdout are terminals, the default format is `tui`. Otherwise, the default is `text`.
+### Quick path
 
-Examples:
+1. In a terminal, run `osdy-cleaner scan`.
+2. The read-only TUI opens first and scans the five built-in categories in order.
+3. Review the finalized dashboard; findings are prompts for manual review, not cleanup instructions.
+
+When both stdin and stdout are terminals, the default format is `tui`. Otherwise, the default is `text`.
 
 ```sh
 osdy-cleaner scan
 osdy-cleaner scan --format text
 osdy-cleaner scan --format json
 ```
+
+### Terminal dashboard
+
+The TUI shows category-level progress only: the active category and completed count across npm cache, Homebrew cache, Gradle caches, Xcode DerivedData, and CoreSimulator. It does not invent per-file percentages or a pre-scan pass. After scanning, the dashboard shows the outcome, estimates, findings, warnings, and all five categories in that order.
+
+Use `h`/`l` or Left/Right to choose a category, `j`/`k` or Up/Down to scroll its detail, `Page Up`/`Page Down` to jump through categories, `Tab` to switch findings and warnings, and `q` to quit. A narrow terminal uses a compact stacked layout with the same textual meaning; color is never required to understand it.
+
+Estimates are not promises of reclaimable disk space. APFS clones, snapshots, compression, and hard links can make recovery lower or different, and CoreSimulator data needs product-aware manual review.
 
 OsdyCleaner scans only these fixed locations in the current user's home directory:
 
@@ -74,7 +86,7 @@ go build -o osdy-cleaner ./cmd/osdy-cleaner
 
 ## Automation and output
 
-`--format json` emits deterministic schema-v1 JSON. It includes the scan outcome, policy, estimates, roots, findings, warnings, and caveats; it is intended for scripts and CI.
+`--format text` and `--format json` remain noninteractive and stable. `--format json` emits deterministic schema-v1 JSON containing the scan outcome, policy, estimates, roots, findings, warnings, and caveats; it is intended for scripts and CI.
 
 ```sh
 osdy-cleaner scan --format json > osdy-cleaner-report.json
