@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/osdy/OsdyCleaner/internal/core"
 	"github.com/osdy/OsdyCleaner/internal/scan"
@@ -54,6 +55,9 @@ func run(ctx context.Context, d Dependencies, format string) error {
 		snapshot, err = d.Scan(ctx)
 	}
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return &exitError{code: ExitCancelled, err: err}
+		}
 		if errors.Is(err, scan.ErrUnsupported) {
 			return &exitError{code: ExitUnsupported, err: err}
 		}
@@ -71,8 +75,12 @@ func run(ctx context.Context, d Dependencies, format string) error {
 	if err != nil {
 		return failure(err)
 	}
-	if _, err := d.Output.Write(bytes); err != nil {
+	n, err := d.Output.Write(bytes)
+	if err != nil {
 		return failure(err)
+	}
+	if n < len(bytes) {
+		return failure(io.ErrShortWrite)
 	}
 	return outcomeExit(snapshot)
 }

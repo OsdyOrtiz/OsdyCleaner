@@ -297,6 +297,21 @@ A root-scoped warning MUST NOT produce code `1`. Cancellation MUST take preceden
 - AND stderr contains only separate diagnostics, if any
 - AND the process exits with code `130`
 
+#### Scenario: Classify a scan cancellation error
+
+- GIVEN the scanner or interactive scan returns `context.Canceled`, directly or wrapped
+- WHEN the CLI classifies that error instead of receiving a finalized snapshot
+- THEN the process exits with code `130` without a failure diagnostic
+- AND no report is rendered or written
+
+#### Scenario: Detect an incomplete report write
+
+- GIVEN a finalized snapshot and a writer that accepts fewer bytes than the report contains
+- WHEN the writer returns no error
+- THEN the CLI reports `io.ErrShortWrite` on stderr and exits with code `1`
+- AND it does not retry the write or classify the report as successfully delivered
+- AND a writer-supplied error takes precedence over `io.ErrShortWrite`
+
 ### Requirement: Disposable and Deterministic Verification
 
 All automated filesystem tests for this capability MUST use controlled fixtures and temporary directories and MUST never inspect or mutate the developer's or test runner's real home directory. Tests MUST cover normal and empty roots, every-root-missing, an inaccessible root and entry, symbolic links, simulated or controlled mount/device boundaries, repeated identities/hard links, cancellation, deterministic text and JSON, shared snapshot equivalence, and read-only dashboard language.
